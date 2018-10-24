@@ -21,9 +21,9 @@
 # SOFTWARE.
 #
 
-CC = rsdk-linux-gcc
+#CC = rsdk-linux-gcc
 
-CFLAGS = -std=c99 -O0 -g -D_GNU_SOURCE
+CFLAGS = -std=c99 -O0 -g -D_GNU_SOURCE -DJSMN_STRICT -DJSMN_FIRST_CHILD_NEXT_SIBLING
 LIBS = -lm
 
 SRC = $(wildcard *.c)

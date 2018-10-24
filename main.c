@@ -1,78 +1,76 @@
-/*
- * Bergamota-ng Command line interface (c) 2018 Cassiano Martin <cassiano@polaco.pro.br>
- * Copyright (c) 2018 Cassiano Martin
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+// -------------------------------------- //
+// Copyright 2014,2015 kacangbawang.com   //
+// See LICENSE                            //
+// -------------------------------------- //
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <signal.h>
-#include <setjmp.h>
-#include <signal.h>
+#include <stdio.h>  //printf
+#include <string.h> //strlen
+#include <assert.h> //asert
+#include <errno.h>  //errno
 
-#include "main.h"
+#include "rpc.h"
 
-jmp_buf rpoint;
+//rpc prototype
+static
+workstatus_t echo(const char* const pcJSONString, const jsmntok_t* const ps_argtok,
+          const jsmntok_t* const ps_alltoks, char* pcResponse, int RespMaxLen);
 
-void sig_handler(int sig)
+//rpc sig
+static methodtable_entry_t test_methods[] = {
+    {"echo", "(S)P", echo},
+};
+
+//rpc body
+static
+workstatus_t echo(const char* const pcJSONString, const jsmntok_t* const ps_argtok,
+          const jsmntok_t* const ps_alltoks, char* pcResponse, int iRespMaxLen)
 {
-    if(sig == SIGSEGV)
-    {
-        printf("Received segfault\n");
-        signal(SIGSEGV, &sig_handler);
-        longjmp(rpoint, SIGSEGV);
+    //estimate
+    const jsmntok_t* psTokEchoValue = &ps_alltoks[(&ps_alltoks[ps_argtok->first_child])->first_child];
+    if (pcResponse && iRespMaxLen < (2 + psTokEchoValue->end - psTokEchoValue->start)) {
+        return WORKSTATUS_RPC_ERROR_OUTOFRESBUF;
     }
+
+    //do function
+    //nothing
+
+    //write retval
+    if (pcResponse) {
+        snprintf(pcResponse, iRespMaxLen, "\"%.*s\"", psTokEchoValue->end - psTokEchoValue->start,
+                                            &pcJSONString[psTokEchoValue->start]);
+    }
+
+    //return status
+    return WORKSTATUS_NO_ERROR;
 }
 
-int main(int argc, char **argv)
-{
-    signal(SIGSEGV, &sig_handler);
+#define MY_BUF_SIZE 2048
+static char g_input[MY_BUF_SIZE];
+static char g_output[MY_BUF_SIZE];
 
-    int fcode = setjmp(rpoint);
+int main(int argc, char** argv) {
 
-    if(fcode == 0)
-    {
-        char *type = getenv("REQUEST_METHOD");
-        char *url = getenv("REQUEST_URI");
-        int lenght = atoi(getenv("CONTENT_LENGTH"));
-        int i;
-
-        char *buf = (char *)malloc(sizeof(char)*(lenght+1));
-
-        for(i=0; i<lenght; i++)
-            buf[i] = fgetc(stdin);
-        buf[i]='\0';
-
-        printf("Content-Type: application/json\r\n");
-        printf("Accept: application/json\r\n");
-        printf("\r\n");
-        printf("{ \"type\": \"%s\", \"url\": \"%s\", \"lenght\": \"%d\", \"buf\": \"%s\" }", type, url, lenght, buf);
-
-        free(buf);
-    }
-    else
-    {
-        //DEBUG("Application crashed, received a SIGSEGV code: %d", fcode);
-        exit(EXIT_FAILURE);
+    workstatus_t eStatus = rpc_install_methods(test_methods, sizeof(test_methods)/sizeof(test_methods[0]));
+    if(eStatus != WORKSTATUS_NO_ERROR) {
+    	assert(0);
     }
 
-    return EXIT_SUCCESS;
+	int status = fread(g_input, 1, sizeof(g_input),  stdin);
+	if (status == 0) {
+		fprintf(stderr, "fread(): errno=%d\n", errno);
+        return 1;
+    }
+
+	//rpc
+    eStatus = rpc_handle_command(g_input, strlen(g_input), g_output, MY_BUF_SIZE);
+        
+	//text reply?
+    if(strlen(g_output) > 0) {
+    	printf(">> %s\n", g_output);
+    } else {
+    	printf(">> no reply\n");
+    }
+    printf("%s\n", workstatus_to_string(eStatus));
+
+	return 0;
 }
