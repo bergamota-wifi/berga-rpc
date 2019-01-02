@@ -23,7 +23,7 @@
 
 #CC = rsdk-linux-gcc
 
-CFLAGS = -std=c99 -O0 -g -D_GNU_SOURCE -DJSMN_STRICT -DJSMN_FIRST_CHILD_NEXT_SIBLING
+CFLAGS = -std=c99 -O0 -g -D_GNU_SOURCE
 LIBS = -lm
 
 SRC = $(wildcard *.c)
